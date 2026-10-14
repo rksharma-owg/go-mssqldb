@@ -29,9 +29,9 @@ jobs:
       # actions/checkout v6
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: 7677ef0fb0284bb317cfec78b436545f87f3997a
+          ref: 0d9551cae1289ed8aaf646a879412dc1d4f8ac8c
       - name: Verify tested commit
-        run: test "$(git rev-parse HEAD)" = 7677ef0fb0284bb317cfec78b436545f87f3997a
+        run: test "$(git rev-parse HEAD)" = 0d9551cae1289ed8aaf646a879412dc1d4f8ac8c
       - name: Setup go
         # actions/setup-go v6
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -83,6 +83,11 @@ jobs:
             exit 1
           fi
           go test -coverprofile=coverage.out -covermode=atomic -v ./...
+          go vet ./...
+      - name: Verify project coverage
+        run: |
+          go tool cover -func=coverage.out | tail -1
+          go tool cover -func=coverage.out | awk '/total:/ { if (($3+0) < 80) exit 1 }'
       - name: Upload coverage to Codecov
         # codecov/codecov-action v6
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6
@@ -113,7 +118,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          ref: 7677ef0fb0284bb317cfec78b436545f87f3997a
+          ref: 0d9551cae1289ed8aaf646a879412dc1d4f8ac8c
       - name: Setup go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -262,3 +267,16 @@ jobs:
             gh pr comment "${{ github.event.pull_request.number }}" --body "$BODY"
             echo "Posted new benchmark comment."
           fi
+
+  golangci-lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 0d9551cae1289ed8aaf646a879412dc1d4f8ac8c
+      - uses: reviewdog/action-golangci-lint@c76cceaaab89abe74e649d2e34c6c9adc26662d2
+        with:
+          level: warning
+          reporter: local
