@@ -1307,6 +1307,9 @@ func makeDecl(ti typeInfo) (string, error) {
 			return fmt.Sprintf("varchar(%d)", ti.Size), nil
 		}
 	case typeNVarChar:
+		if ti.Size > 0 && ti.Size <= 8000 && ti.Size%2 != 0 {
+			return "", fmt.Errorf("invalid size of NVARCHARTYPE: %d", ti.Size)
+		}
 		if ti.Size > 8000 || ti.Size == 0 {
 			return "nvarchar(max)", nil
 		} else {
