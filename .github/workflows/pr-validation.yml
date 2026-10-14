@@ -28,10 +28,10 @@ jobs:
     steps:
       # actions/checkout v6
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 7677ef0fb0284bb317cfec78b436545f87f3997a
       - name: Verify tested commit
-        run: |
-          git rev-parse HEAD
-          git merge-base --is-ancestor 7677ef0 HEAD
+        run: test "$(git rev-parse HEAD)" = 7677ef0fb0284bb317cfec78b436545f87f3997a
       - name: Setup go
         # actions/setup-go v6
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -113,6 +113,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          ref: 7677ef0fb0284bb317cfec78b436545f87f3997a
       - name: Setup go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
