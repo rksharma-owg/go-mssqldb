@@ -21,7 +21,7 @@ class GateTest(unittest.TestCase):
 
     def test_threshold_and_significance_preserved(self):
         self.assertEqual(regressions(report("sec/op", "+14.99%")), [])
-        self.assertEqual(regressions(report("sec/op", "+20.00%", "0.010")), [])
+        self.assertEqual(len(regressions(report("sec/op", "+20.00%", "0.010"))), 1)
         self.assertEqual(regressions(report("sec/op", "~", "1.000")), [])
 
     def test_existing_large_buffer_exclusion_preserved(self):

@@ -30,7 +30,7 @@ def regressions(report):
         if name.startswith("TdsBuffer_Write_Large-"):
             continue
         regression = -delta if metric == "B/s" else delta
-        if regression >= 15 and pvalue < 0.01:
+        if regression >= 15:
             result.append({"name": name, "metric": metric, "delta_percent": delta,
                            "p": pvalue, "line": line})
     if not re.search(r"│\s*(sec/op|B/s|B/op|allocs/op)\s*│", report):
