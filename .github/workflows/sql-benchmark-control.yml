@@ -1,0 +1,73 @@
+name: SQL benchmark control
+on:
+  push:
+    branches: [codex/preflight-453-benchmark-control]
+permissions:
+  contents: read
+jobs:
+  benchmark-control:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.27.2'
+      - name: Verify harness and source commits
+        shell: bash
+        run: |
+          git rev-parse HEAD
+          git worktree add "$RUNNER_TEMP/base-src" fa8008dc66468d611c36f75f2972de7ad77f775f
+          git worktree add "$RUNNER_TEMP/merge-src" 0d9551cae1289ed8aaf646a879412dc1d4f8ac8c
+          test "$(git -C "$RUNNER_TEMP/base-src" rev-parse HEAD)" = fa8008dc66468d611c36f75f2972de7ad77f775f
+          test "$(git -C "$RUNNER_TEMP/merge-src" rev-parse HEAD)" = 0d9551cae1289ed8aaf646a879412dc1d4f8ac8c
+          git diff --exit-code fa8008dc66468d611c36f75f2972de7ad77f775f 0d9551cae1289ed8aaf646a879412dc1d4f8ac8c -- buf.go buf_benchmark_test.go tds.go tds_benchmark_test.go
+          go version
+          (cd .github/sql-preflight && python3 -m unittest -v)
+      - name: Compile immutable benchmark binaries
+        shell: bash
+        run: |
+          (cd "$RUNNER_TEMP/base-src" && go test -c -o "$RUNNER_TEMP/base.test" .)
+          (cd "$RUNNER_TEMP/merge-src" && go test -c -o "$RUNNER_TEMP/merge.test" .)
+          go install golang.org/x/perf/cmd/benchstat@v0.0.0-20261009192801-be2c69fb417e
+      - name: Collect interleaved controls and merge samples
+        shell: bash
+        run: |
+          mkdir results
+          PATTERN='^Benchmark(TdsBuffer_(Write_Small|Write_Medium|Read_Small|Uint16)|Str2ucs2_(Medium|Long)|Ucs22str_(ASCII|LongASCII))$'
+          "$RUNNER_TEMP/base.test" -test.run='^$' -test.bench="$PATTERN" -test.benchtime=100ms > results/base-warmup.txt
+          "$RUNNER_TEMP/merge.test" -test.run='^$' -test.bench="$PATTERN" -test.benchtime=100ms > results/merge-warmup.txt
+          for sample in {1..10}; do
+            if (( sample % 2 )); then order='control-a merge control-b'; else order='control-b merge control-a'; fi
+            for label in $order; do
+              binary=base
+              if [ "$label" = merge ]; then binary=merge; fi
+              echo "sample=$sample label=$label sha=$binary"
+              "$RUNNER_TEMP/$binary.test" -test.run='^$' -test.bench="$PATTERN" -test.benchtime=1s -test.count=1 -test.benchmem >> "results/$label.txt"
+            done
+          done
+          benchstat -alpha=0.01 results/control-a.txt results/control-b.txt > results/same-sha-benchstat.txt
+          cat results/control-a.txt results/control-b.txt > results/baseline-combined.txt
+          benchstat -alpha=0.01 results/baseline-combined.txt results/merge.txt > results/merge-benchstat.txt
+          cat results/same-sha-benchstat.txt
+          cat results/merge-benchstat.txt
+      - name: Apply unchanged regression threshold with metric direction
+        shell: bash
+        run: |
+          set +e
+          python3 .github/sql-preflight/benchmark_gate.py results/same-sha-benchstat.txt > results/control-regressions.json
+          control_status=$?
+          python3 .github/sql-preflight/benchmark_gate.py results/merge-benchstat.txt > results/merge-regressions.json
+          merge_status=$?
+          set -e
+          cat results/control-regressions.json results/merge-regressions.json
+          test "$control_status" = 0 && test "$merge_status" = 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-controls
+          path: results/
